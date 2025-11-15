@@ -1,5 +1,6 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 fun properties(key: String) = project.findProperty(key).toString()
 fun environment(key: String) = providers.environmentVariable(key)
@@ -28,7 +29,8 @@ kotlin {
     jvmToolchain {
         languageVersion = JavaLanguageVersion.of(17)
         vendor = JvmVendorSpec.JETBRAINS
-    }}
+    }
+}
 
 intellij {
     pluginName = properties("pluginName")
@@ -85,5 +87,11 @@ tasks {
     publishPlugin {
         dependsOn("patchChangelog")
         token = environment("PUBLISH_TOKEN")
+    }
+
+    withType<KotlinCompile>().configureEach {
+        compilerOptions {
+            freeCompilerArgs.add("-Xskip-metadata-version-check")
+        }
     }
 }

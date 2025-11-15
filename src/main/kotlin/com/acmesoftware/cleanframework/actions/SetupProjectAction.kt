@@ -13,36 +13,30 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.PlainTextLanguage
-import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiFileFactory
+import com.intellij.psi.*
 import com.intellij.psi.impl.file.PsiDirectoryFactory
 import com.jetbrains.lang.dart.DartLanguage
 import com.jetbrains.lang.dart.util.PubspecYamlUtil
-import org.jetbrains.kotlin.idea.core.util.toPsiFile
-import org.jetbrains.kotlin.utils.addToStdlib.UnsafeCastFunction
-import org.jetbrains.kotlin.utils.addToStdlib.cast
 import org.yaml.snakeyaml.Yaml
 
 
 class SetupProjectAction : AnAction() {
     private lateinit var dataContext: DataContext
 
-    @OptIn(UnsafeCastFunction::class)
     override fun actionPerformed(e: AnActionEvent) {
         val application = ApplicationManager.getApplication()
-        val project = CommonDataKeys.PROJECT.getData(dataContext)
+        val project = CommonDataKeys.PROJECT.getData(dataContext) ?: return
         val view = LangDataKeys.IDE_VIEW.getData(dataContext)
 
         val focusedVirtualFile = if (view == null) {
-            val editor = LangDataKeys.EDITOR.getData(dataContext)!!
-            FileDocumentManager.getInstance().getFile(editor.document)!!.parent
+            val editor = LangDataKeys.EDITOR.getData(dataContext) ?: return
+            FileDocumentManager.getInstance().getFile(editor.document)?.parent ?: return
         } else {
-            view.orChooseDirectory!!.virtualFile
+            view.orChooseDirectory?.virtualFile ?: return
         }
 
-        val pubspecFile = PubspecYamlUtil.findPubspecYamlFile(project!!, focusedVirtualFile)
-        val libDir = pubspecFile!!.parent.findChild(PubspecYamlUtil.LIB_DIR_NAME)!!
+        val pubspecFile = PubspecYamlUtil.findPubspecYamlFile(project, focusedVirtualFile) ?: return
+        val libDir = pubspecFile.parent.findChild(PubspecYamlUtil.LIB_DIR_NAME)!!
         val packageName = PubspecYamlUtil.getDartProjectName(pubspecFile)!!
         val packageNamePascal = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, packageName)
 
@@ -105,12 +99,17 @@ class SetupProjectAction : AnAction() {
 
                 findOrCreateDirectory(libDirectory, "features")
 
-                pubspecFile.toPsiFile(project)?.also {
+                PsiManager.getInstance(project).findFile(pubspecFile)?.also {
                     val pubspecYamlBuilder = StringBuilder(it.text)
 
-                    val yamlMap = Yaml().load<HashMap<String, Any>>(pubspecFile.inputStream)
-                    val dependencies = yamlMap[PubspecYamlUtil.DEPENDENCIES].cast<HashMap<String, Any>>().keys
-                    val devDependencies = yamlMap[PubspecYamlUtil.DEV_DEPENDENCIES].cast<HashMap<String, Any>>().keys
+                    val yamlMap = pubspecFile.inputStream.use { stream ->
+                        @Suppress("UNCHECKED_CAST")
+                        (Yaml().load<Map<String, Any?>>(stream) ?: emptyMap())
+                    }
+                    val dependencies = (yamlMap[PubspecYamlUtil.DEPENDENCIES] as? Map<*, *>)?.keys
+                        ?.filterIsInstance<String>()?.toSet() ?: emptySet()
+                    val devDependencies = (yamlMap[PubspecYamlUtil.DEV_DEPENDENCIES] as? Map<*, *>)?.keys
+                        ?.filterIsInstance<String>()?.toSet() ?: emptySet()
 
                     listOf("clean_framework_router", "clean_framework").forEach { dep ->
                         if (!dependencies.contains(dep)) insertDependency(pubspecYamlBuilder, dep)

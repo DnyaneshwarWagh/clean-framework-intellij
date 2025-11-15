@@ -12,7 +12,7 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JTextField
 
-class GenerateFeatureDialog(private val callback: Callback) : DialogWrapper(true) {
+class GenerateFeatureDialog(private val onGenerate: (String) -> Unit) : DialogWrapper(true) {
     private lateinit var featureNameTextField: JTextField
     private lateinit var errorLabel: JLabel
 
@@ -53,14 +53,10 @@ class GenerateFeatureDialog(private val callback: Callback) : DialogWrapper(true
         if (featureNameRegex.matches(featureName)) {
             super.doOKAction()
 
-            callback.onGenerateFeature(featureName)
+            onGenerate(featureName)
         } else {
             errorLabel.text = "Feature name should be in PascalCase"
             errorLabel.foreground = JBColor(DarculaColors.RED, DarculaColors.RED)
         }
-    }
-
-    interface Callback {
-        fun onGenerateFeature(featureName: String)
     }
 }

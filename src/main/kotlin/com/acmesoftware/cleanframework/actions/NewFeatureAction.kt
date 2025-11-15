@@ -22,40 +22,39 @@ import com.intellij.util.IncorrectOperationException
 import com.jetbrains.lang.dart.DartLanguage
 import com.jetbrains.lang.dart.util.PubspecYamlUtil
 
-class NewFeatureAction : AnAction(), GenerateFeatureDialog.Callback {
-    private lateinit var dataContext: DataContext
+class NewFeatureAction : AnAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
-        val dialog = GenerateFeatureDialog(this)
+        val context = e.dataContext
+        val dialog = GenerateFeatureDialog { featureName ->
+            generateFeature(featureName, context)
+        }
         dialog.show()
     }
 
     override fun update(e: AnActionEvent) {
-        e.dataContext.let {
-            this.dataContext = it
-            val presentation = e.presentation
-            presentation.isEnabled = true
-        }
+        e.presentation.isEnabled = true
     }
 
-    override fun onGenerateFeature(featureName: String) {
+    private fun generateFeature(featureName: String, dataContext: DataContext) {
         val application = ApplicationManager.getApplication()
-        val project = CommonDataKeys.PROJECT.getData(dataContext)
+        val project = CommonDataKeys.PROJECT.getData(dataContext) ?: return
         val view = LangDataKeys.IDE_VIEW.getData(dataContext)
 
         val focusedVirtualFile = if (view == null) {
-            val editor = LangDataKeys.EDITOR.getData(dataContext)!!
-            FileDocumentManager.getInstance().getFile(editor.document)!!.parent
+            val editor = LangDataKeys.EDITOR.getData(dataContext) ?: return
+            FileDocumentManager.getInstance().getFile(editor.document)?.parent ?: return
         } else {
-            view.orChooseDirectory!!.virtualFile
+            view.orChooseDirectory?.virtualFile ?: return
         }
 
-        val pubspecFile = PubspecYamlUtil.findPubspecYamlFile(project!!, focusedVirtualFile)
-        val libDir = pubspecFile!!.parent.findChild(PubspecYamlUtil.LIB_DIR_NAME)!!
-        val packageName = PubspecYamlUtil.getDartProjectName(pubspecFile)!!
+        val pubspecFile = PubspecYamlUtil.findPubspecYamlFile(project, focusedVirtualFile) ?: return
+        val libDir = pubspecFile.parent.findChild(PubspecYamlUtil.LIB_DIR_NAME) ?: return
+        val packageName = PubspecYamlUtil.getDartProjectName(pubspecFile) ?: return
 
         val libDirectory = PsiDirectoryFactory.getInstance(project).createDirectory(libDir)
-        val featuresDirectory = libDirectory.findSubdirectory("features")!!
+        val featuresDirectory = libDirectory.findSubdirectory("features")
+            ?: libDirectory.createSubdirectory("features")
 
         application.runWriteAction {
             val runnable = Runnable {
@@ -69,7 +68,7 @@ class NewFeatureAction : AnAction(), GenerateFeatureDialog.Callback {
                         FeatureGeneratorFactory.getGenerators(packageName, featureName)
                     )
 
-                    val root = libDirectory.parent!!
+                    val root = libDirectory.parent ?: libDirectory
                     val testDirectory = findOrCreateDirectory(root, "test")
                     val featuresTestDirectory = findOrCreateDirectory(testDirectory, "features")
 
